@@ -27,7 +27,7 @@ async function initializeDatabase() {
     await db.run(
       "CREATE TABLE Athletes (id INTEGER PRIMARY KEY AUTOINCREMENT, fullname TEXT)"
     );
-
+    
     await db.run(
       "CREATE TABLE Competitions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, year INTEGER)"
     );
@@ -36,16 +36,27 @@ async function initializeDatabase() {
       "CREATE TABLE Results (id INTEGER PRIMARY KEY AUTOINCREMENT, athlete INTEGER, competition INTEGER, time INTEGER, rank INTEGER)"
     );
     
-    await loadCompetition("SM12", 2012, "results-2012.csv");
-    await loadCompetition("SM13", 2013, "results-2013.csv");
-    await loadCompetition("SM14", 2014, "results-2014.csv");
-    await loadCompetition("SM15", 2015, "results-2015.csv");
-    await loadCompetition("SM16", 2016, "results-2016.csv");
-    await loadCompetition("SM17", 2017, "results-2017.csv");
-    await loadCompetition("SM18", 2018, "results-2018.csv");
-    await loadCompetition("SM19", 2019, "results-2019.csv");
-    await loadCompetition("SM21", 2021, "results-2021.csv");
-    await loadCompetition("SM22", 2022, "results-2022.csv");
+    
+    await loadCometitionStandart("SM03", 2003, "results-2003.csv");
+    await loadCometitionStandart("SM04", 2004, "results-2004.csv");
+    await loadCometitionStandart("SM05", 2005, "results-2005.csv");
+    await loadCometitionStandart("SM06", 2006, "results-2006.csv");
+    await loadCometitionStandart("SM07", 2007, "results-2007.csv");
+    await loadCometitionSimpleFullname("SM08", 2008, "results-2008-simple.csv");
+    await loadCometitionStandart("SM09", 2009, "results-2009.csv");    
+    await loadCometitionSimple("SM10", 2010, "results-2010-simple.csv"); 
+    await loadCometitionSimple("SM11", 2011, "results-2011-simple.csv");
+    await loadCometitionStandart("SM12", 2012, "results-2012.csv");
+    await loadCometitionStandart("SM13", 2013, "results-2013.csv");
+
+    await loadCometitionStandart("SM14", 2014, "results-2014.csv");
+    await loadCometitionStandart("SM15", 2015, "results-2015.csv");
+    await loadCometitionStandart("SM16", 2016, "results-2016.csv");
+    await loadCometitionStandart("SM17", 2017, "results-2017.csv");
+    await loadCometitionStandart("SM18", 2018, "results-2018.csv");
+    await loadCometitionStandart("SM19", 2019, "results-2019.csv");
+    await loadCometitionStandart("SM21", 2021, "results-2021.csv");
+    await loadCometitionStandart("SM22", 2022, "results-2022.csv");
     
     await generateGlobalRanking();
     
@@ -54,11 +65,43 @@ async function initializeDatabase() {
   }
 }
 
+function capitalizeTheFirstLetterOfEachWord(words) {
+   var separateWord = words.toLowerCase().split(' ');
+   for (var i = 0; i < separateWord.length; i++) {
+      separateWord[i] = separateWord[i].charAt(0).toUpperCase() +
+      separateWord[i].substring(1);
+   }
+   return separateWord.join(' ');
+}
+
 const removeAccents = (str) =>
   str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-async function loadCompetition(competitionName, year, filename) {
+
+async function loadCometitionStandart(competitionName, year, filename) {
+  return loadCompetition(competitionName, year, filename);
+}
+
+async function loadCometitionSimple(competitionName, year, filename) {
+  return loadCompetition(competitionName, year, filename, true);
+}
+
+async function loadCometitionSimpleFullname(competitionName, year, filename) {
+  return loadCompetition(competitionName, year, filename, true, true);
+}
+
+async function loadCompetition(competitionName, year, filename, isSimple=false, isFullname=false) {
   try {
+    
+    //default for time is 6th column, but sometimes 2 mid colums are missing
+    var timeColumn = isSimple? 4:6;
+    
+    //sometimes it comes without separete name and surname, so timeColum is shifted
+    if (isFullname) {
+       timeColumn--;
+    }
+    
+    
     const competitionId = await createCompetition(competitionName, year);
     console.log("Loading " + competitionName + ": " + competitionId);
 
@@ -69,8 +112,8 @@ async function loadCompetition(competitionName, year, filename) {
       var rank = row[0];
       var name = row[2];
       var surname = row[3];
-      var fullname = name + " " + surname;
-      var time = row[6];
+      var fullname = isFullname? name : (name + " " + surname);
+      var time = row[timeColumn];
       console.log("Loading " + competitionName + "-" +  rank)
       var athleteId = await createAthlete(fullname);
       await fillCompetitionResults(competitionId, athleteId, rank, time);
@@ -82,8 +125,9 @@ async function loadCompetition(competitionName, year, filename) {
 
 async function createAthlete(fullName) {
   try {
-    const normFullName = removeAccents(fullName);
+    const normFullName = capitalizeTheFirstLetterOfEachWord(removeAccents(fullName));
 
+    //TODO: Cache in a Map
     const athletes = await db.all(
       "SELECT * from Athletes WHERE fullname = ?",
       normFullName
